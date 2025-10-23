@@ -36,7 +36,7 @@ Basic command line knowledge
 
 Quick Start
 1. Initial Setup
-bash
+
 # Update system
 sudo apt update && sudo apt upgrade -y
 
@@ -50,7 +50,6 @@ cd /var/www/phishcamp
 2. Configure Web Server
 Create Nginx configuration:
 
-bash
 sudo nano /etc/nginx/sites-available/phishcamp
 Add:
 
@@ -78,7 +77,7 @@ server {
 }
 Enable the site:
 
-bash
+
 sudo ln -s /etc/nginx/sites-available/phishcamp /etc/nginx/sites-enabled/
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t
@@ -211,13 +210,13 @@ if __name__ == '__main__':
     print(f"URL: {email['url']}")
     print(f"Body:\n{email['body']}")
 6. Set Permissions
-bash
+
 sudo chown -R www-data:www-data /var/www/phishcamp
 sudo chmod -R 755 /var/www/phishcamp
 sudo touch /var/www/phishcamp/access.log /var/www/phishcamp/credentials.log
 sudo chmod 666 /var/www/phishcamp/*.log
 7. Start Services
-bash
+
 sudo systemctl start php8.4-fpm
 sudo systemctl enable php8.4-fpm
 sudo systemctl restart nginx
@@ -225,7 +224,7 @@ Usage
 Running a Phishing Campaign
 Generate phishing emails:
 
-bash
+
 cd /var/www/phishcamp
 python3 email_generator.py
 Send emails with generated tracking URLs
@@ -240,7 +239,7 @@ Password: phishcamp123
 
 View real-time logs:
 
-bash
+
 tail -f /var/www/phishcamp/credentials.log
 Example Campaign
 bash
@@ -255,12 +254,12 @@ print(f'Campaign URL: http://YOUR_SERVER_IP/?tid={tid}')
 curl "http://YOUR_SERVER_IP/?tid=TEST123"
 Security Considerations
 Firewall Configuration
-bash
+
 sudo ufw allow 'Nginx HTTP'
 sudo ufw allow ssh
 sudo ufw enable
 Secure Log Files
-bash
+
 sudo chmod 640 /var/www/phishcamp/*.log
 Regular Maintenance
 Delete captured credentials after testing
@@ -273,7 +272,7 @@ Troubleshooting
 Common Issues
 500 Internal Server Error
 
-bash
+
 # Check PHP error log
 sudo tail -f /var/log/php8.4-fpm.log
 
@@ -281,12 +280,12 @@ sudo tail -f /var/log/php8.4-fpm.log
 sudo tail -f /var/log/nginx/error.log
 Permission Denied
 
-bash
+
 sudo chown -R www-data:www-data /var/www/phishcamp
 sudo chmod -R 755 /var/www/phishcamp
 Page Not Loading
 
-bash
+
 # Check services
 sudo systemctl status nginx
 sudo systemctl status php8.4-fpm
